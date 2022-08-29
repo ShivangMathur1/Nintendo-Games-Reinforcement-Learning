@@ -8,6 +8,7 @@ from torch.distributions.categorical import Categorical
 
 class PPOMemory:
     def __init__(self, batch_size):
+        self.cap = batch_size * 20
         self.states = []
         self.actions = []
         self.rewards = []
@@ -36,6 +37,14 @@ class PPOMemory:
         self.rewards.append(reward)
         self.dones.append(done)
 
+        if len(self.states) > self.cap:
+            self.states.pop(0)
+            self.actions.pop(0)
+            self.probs.pop(0)
+            self.vals.pop(0)
+            self.rewards.pop(0)
+            self.dones.pop(0)
+
     def clear_memory(self):
         self.states = []
         self.actions = []
@@ -51,14 +60,15 @@ class ActorNetwork(nn.Module):
 
         self.checkpoint_file = os.path.join(chkpt_dir, 'actor')
         self.actor = nn.Sequential(
-            nn.Conv2d(input_dims[2], fc1_dims, 5, stride=2),
+            nn.Conv2d(input_dims[0], fc1_dims, 5, stride=2),
             nn.ReLU(),
             nn.BatchNorm2d(fc1_dims),
             nn.Conv2d(fc1_dims, fc2_dims, 5, stride=2),
             nn.ReLU(),
             nn.BatchNorm2d(fc2_dims),
             nn.Flatten(),
-            nn.Linear(222528, n_actions),
+            nn.Linear(20736, 512),
+            nn.Linear(512, n_actions),
             nn.Softmax(dim=-1)
         )
 
@@ -67,11 +77,10 @@ class ActorNetwork(nn.Module):
         self.to(self.device)
 
     def forward(self, state):
-        state = state.view(state.shape[0], state.shape[3], state.shape[1], state.shape[2])
         dist = self.actor(state)
-        print(dist)
+        # print(dist)
         dist = Categorical(dist)
-        print(dist.probs)
+        # print(dist.probs)
         # get categorical distribution from probabilities
         return dist 
 
@@ -88,14 +97,15 @@ class CriticNetwork(nn.Module):
 
         self.checkpoint_file = os.path.join(chkpt_dir, 'critic')
         self.critic = nn.Sequential(
-            nn.Conv2d(input_dims[2], fc1_dims, 5, stride=2),
+            nn.Conv2d(input_dims[0], fc1_dims, 5, stride=2),
             nn.ReLU(),
             nn.BatchNorm2d(fc1_dims),
             nn.Conv2d(fc1_dims, fc2_dims, 5, stride=2),
             nn.ReLU(),
             nn.BatchNorm2d(fc2_dims),
             nn.Flatten(),
-            nn.Linear(222528, 1)
+            nn.Linear(20736, 512),
+            nn.Linear(512, 1),
         )
 
         self.optimizer = optim.Adam(self.parameters(), lr=alpha)
@@ -103,7 +113,6 @@ class CriticNetwork(nn.Module):
         self.to(self.device)
 
     def forward(self, state):
-        state = state.view(state.shape[0], state.shape[3], state.shape[1], state.shape[2])
         value = self.critic(state)
         return value
 
@@ -140,12 +149,12 @@ class Agent:
         self.critic.load_checkpoint()
 
     def choose_action(self, observation):
-        state = T.tensor([observation], dtype=T.float).to(self.actor.device)
+        state = T.tensor(observation.__array__(), dtype=T.float).unsqueeze(0).to(self.actor.device)
 
         dist = self.actor(state)
         value = self.critic(state)
         action = dist.sample()
-        print(action)
+        # print(action)
 
         probs = T.squeeze(dist.log_prob(action)).item()
         action = T.squeeze(action).item()
