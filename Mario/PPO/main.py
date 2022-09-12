@@ -87,10 +87,10 @@ print(env.action_space.n)
 print(env.observation_space.shape)
 agent = Agent(n_actions=env.action_space.n, batch_size=batch_size, alpha=alpha, 
                 n_epochs=n_epochs, input_dims=env.observation_space.shape)
-n_games = 300
+n_games = 100
 
 filename = 'mario.png'
-figure_file = os.path.join('Mario\PPO', filename)
+figure_file = os.path.join('Mario/PPO', filename)
 
 best_score = env.reward_range[0]
 score_history = []
